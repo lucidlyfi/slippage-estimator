@@ -12,6 +12,11 @@ f = open("abi_data/Pool.sol.json")
 data = json.load(f)
 pool_abi = data["abi"]
 
+#  loading mastervault abi
+f1 = open("abi_data/MasterVault.sol.json")
+data1 = json.load(f1)
+mastervault_abi = data1["abi"]
+
 # pool contract address
 pool_address = "0x8dBE744F6558F36d34574a0a6eCA5A8dAa827235"
 pool = web3.eth.contract(address=pool_address, abi=pool_abi)
