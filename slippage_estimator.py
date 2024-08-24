@@ -20,7 +20,6 @@ pool = web3.eth.contract(address=pool_address, abi=pool_abi)
 rate_provider_abi = '[{"inputs":[],"name":"RateProvider__InvalidParams","type":"error"},{"inputs":[{"internalType":"address","name":"token_","type":"address"}],"name":"rate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'
 
 pool_supply = pool.functions.supply().call()
-print(pool_supply)
 
 #  math stuff
 PRECISION = 1_000_000_000_000_000_000
@@ -324,6 +323,55 @@ class LogExpMath:
 
 #  instantiate math lib
 math = LogExpMath()
+
+
+def get_output_token(_i: int, _j: int, _dx: int) -> int:
+    num_tokens = pool.functions.numTokens().call()
+    assert _i != _j  # dev: same input and output asset
+    assert _i < num_tokens and _j < num_tokens  # dev: index out of bounds
+    assert _dx > 0  # dev: zero amount
+
+    # update rates for from and to assets
+    supply = 0
+    amplification = 0
+    vb_prod = 0
+    vb_sum = 0
+    vb_prod, vb_sum = pool.functions.virtualBalanceProdSum().call()
+    packed_weights = []
+    rates = []
+    supply, amplification, vb_prod, vb_sum, packed_weights, rates = _get_rates(
+        unsafe_add(_i, 1) | (unsafe_add(_j, 1) << 8), vb_prod, vb_sum)
+    prev_vb_sum = vb_sum
+
+    prev_vb_x = pool.functions.virtualBalance(
+        _i).call() * rates[0] / pool.functions.rate(_i).call()
+    wn_x = _unpack_wn(packed_weights[_i], num_tokens)
+
+    prev_vb_y = pool.functions.virtualBalance(
+        _j).call() * rates[1] / pool.functions.rate(_j).call()
+    wn_y = _unpack_wn(packed_weights[_j], num_tokens)
+
+    dx_fee = _dx * pool.functions.swapFeeRate().call() / PRECISION
+    dvb_x = (_dx - dx_fee) * rates[0] / PRECISION
+    vb_x = prev_vb_x + dvb_x
+
+    # update x_i and remove x_j from variables
+    vb_prod = vb_prod * math._pow_up(int(prev_vb_y), (wn_y)) / \
+        math._pow_down(int(vb_x * PRECISION // prev_vb_x), int(wn_x))
+    vb_sum = vb_sum + dvb_x - prev_vb_y
+
+    # calulate new balance of out token
+    vb_y = _calc_vb(int(wn_y), int(prev_vb_y), int(supply),
+                    int(amplification), int(vb_prod), int(vb_sum))
+    vb_sum += vb_y + dx_fee * rates[0] // PRECISION
+
+    # check bands
+    _check_bands(prev_vb_x * PRECISION // prev_vb_sum,
+                 vb_x * PRECISION // vb_sum, packed_weights[_i])
+    _check_bands(prev_vb_y * PRECISION // prev_vb_sum,
+                 vb_y * PRECISION // vb_sum, packed_weights[_j])
+
+    return (prev_vb_y - vb_y) * PRECISION / rates[1]
 
 
 def get_add_lp(_amounts: List[int]) -> int:
@@ -691,3 +739,5 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
 #  print("result -", int(result))
 
 #  print(int(get_remove_single_lp(1, 1e8)))
+
+print(int(get_output_token(0, 1, 1e12)))
