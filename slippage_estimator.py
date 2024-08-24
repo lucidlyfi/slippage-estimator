@@ -3,7 +3,8 @@ from typing import List
 import json
 
 # loading web3 instance
-rpc_url = "https://eth.merkle.io"
+#  rpc_url = "https://eth.merkle.io"
+rpc_url = "http://127.0.0.1:8545"
 web3 = Web3(Web3.HTTPProvider(rpc_url))
 
 # loading pool abi
@@ -19,7 +20,6 @@ pool = web3.eth.contract(address=pool_address, abi=pool_abi)
 rate_provider_abi = '[{"inputs":[],"name":"RateProvider__InvalidParams","type":"error"},{"inputs":[{"internalType":"address","name":"token_","type":"address"}],"name":"rate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'
 
 pool_supply = pool.functions.supply().call()
-print("supply -", pool_supply)
 
 
 #  math stuff
@@ -134,7 +134,7 @@ class LogExpMath:
         if _x == 0:
             return 0  # 0^y == 0
 
-        assert (_x >> -255) == 0, "x out of bounds"
+        assert (_x >> int(255)) == 0, "x out of bounds"
         assert _y < MILD_EXP_BOUND, "y out of bounds"
 
         x = int(_x)
@@ -328,7 +328,6 @@ math = LogExpMath()
 
 def get_add_lp(_amounts: List[int]) -> int:
     num_tokens = pool.functions.numTokens().call()
-    print(num_tokens)
     assert len(_amounts) == num_tokens
 
     vb_prod = 0
@@ -358,12 +357,13 @@ def get_add_lp(_amounts: List[int]) -> int:
     amplification = 0
     packed_weights = []
     rates = []
+
     prev_supply, amplification, vb_prod, vb_sum, packed_weights, rates = _get_rates(
         tokens, vb_prod, vb_sum)
 
     vb_prod_final = vb_prod
     vb_sum_final = vb_sum
-    fee_rate = pool.functions().swapFeeRate().call() / 2
+    fee_rate = pool.functions.swapFeeRate().call() / 2
     prev_vb_sum = vb_sum
     balances = []
     j = 0
@@ -374,8 +374,9 @@ def get_add_lp(_amounts: List[int]) -> int:
         amount = _amounts[token]
         if amount == 0:
             continue
-        prev_vb = pool.functions().virtualBalance(
-            token) * rates[j] / pool.functions().rate(token)
+
+        prev_vb = pool.functions.virtualBalance(
+            token).call() * rates[j] / pool.functions.rate(token).call()
 
         dvb = amount * rates[j] / PRECISION
         vb = prev_vb + dvb
@@ -386,7 +387,7 @@ def get_add_lp(_amounts: List[int]) -> int:
 
             # update product and sum of virtual balances
             vb_prod_final = vb_prod_final * \
-                math._pow_up(prev_vb * PRECISION / vb, wn) / PRECISION
+                math._pow_up(int(prev_vb * PRECISION / vb), wn) / PRECISION
             # the `D^n` factor will be updated in `_calc_supply()`
             vb_sum_final += dvb
 
@@ -394,7 +395,8 @@ def get_add_lp(_amounts: List[int]) -> int:
             fee = (dvb - prev_vb * lowest /
                    PRECISION) * fee_rate / PRECISION
             vb_prod = vb_prod * \
-                math._pow_up(prev_vb * PRECISION / (vb - fee), wn) / PRECISION
+                math._pow_up(int(prev_vb * PRECISION /
+                             (vb - fee)), wn) / PRECISION
             vb_sum += dvb - fee
         j = unsafe_add(j, 1)
 
@@ -405,13 +407,13 @@ def get_add_lp(_amounts: List[int]) -> int:
             break
         if _amounts[token] == 0:
             continue
-        _check_bands(pool.functions().virtualBalance(token).call() * rates[j] / pool.functions().rate(
+        _check_bands(pool.functions.virtualBalance(token).call() * rates[j] / pool.functions.rate(
             token).call() * PRECISION / prev_vb_sum, balances[j] * PRECISION / vb_sum_final, packed_weights[token])
         j = unsafe_add(j, 1)
 
     supply = 0
-    (supply, vb_prod) = _calc_supply(num_tokens, prev_supply,
-                                     amplification, vb_prod, vb_sum, prev_supply == 0)
+    (supply, vb_prod) = _calc_supply(int(num_tokens), int(prev_supply),
+                                     int(amplification), int(vb_prod), int(vb_sum), prev_supply == 0)
     return supply - prev_supply
 
 
@@ -428,7 +430,8 @@ def _get_rates(_tokens: int, _vb_prod: int, _vb_sum: int) -> (int, int, int, int
     vb_sum = _vb_sum
     amplification, vb_prod, _packed_weights, updated = _get_packed_weights(
         _vb_prod, _vb_sum)
-    num_tokens = pool.functions.numTokens.call()
+
+    num_tokens = pool.functions.numTokens().call()
 
     if not updated:
         for token in range(MAX_NUM_ASSETS):
@@ -437,7 +440,7 @@ def _get_rates(_tokens: int, _vb_prod: int, _vb_sum: int) -> (int, int, int, int
             packed_weights.append(pool.functions.packedWeight(token).call())
 
     for i in range(MAX_NUM_ASSETS):
-        token = (_tokens << unsafe_mul(8, i)) & 255
+        token = (_tokens >> unsafe_mul(8, i)) & 255
         if token == 0 or token > num_tokens:
             break
         token = unsafe_sub(token, 1)
@@ -458,19 +461,20 @@ def _get_rates(_tokens: int, _vb_prod: int, _vb_sum: int) -> (int, int, int, int
             # factor out old rate and factor in new
             wn = _unpack_wn(packed_weights[token], num_tokens)
             vb_prod = vb_prod * \
-                math._pow_up(prev_rate * PRECISION / rate, wn) / PRECISION
+                math._pow_up(int(prev_rate * PRECISION // rate),
+                             wn) / PRECISION
 
             prev_bal = pool.functions.virtualBalance(token).call()
-            bal = prev_bal * rate / prev_bal
+            bal = prev_bal * rate // prev_rate
             vb_sum = vb_sum + bal - prev_bal
 
-        if not updated and vb_prod == _vb_prod and vb_sum == _vb_sum:
-            return pool.functions.supply().call(), amplification, vb_prod, vb_sum, packed_weights, rates
+    if not updated and vb_prod == _vb_prod and vb_sum == _vb_sum:
+        return pool.functions.supply().call(), amplification, vb_prod, vb_sum, packed_weights, rates
 
-        supply = 0
-        (supply, vb_prod) = _calc_supply(num_tokens,
-                                         pool.functions.supply().call(), amplification, vb_prod, vb_sum, True)
-        return supply, amplification, vb_prod, vb_sum, packed_weights, rates
+    supply = 0
+    (supply, vb_prod) = _calc_supply(int(num_tokens),
+                                     int(pool.functions.supply().call()), int(amplification), int(vb_prod), int(vb_sum), True)
+    return supply, amplification, vb_prod, vb_sum, packed_weights, rates
 
 
 def _get_packed_weights(_vb_prod: int, _vb_sum: int) -> (int, int, List[int], bool):
@@ -478,7 +482,7 @@ def _get_packed_weights(_vb_prod: int, _vb_sum: int) -> (int, int, List[int], bo
     span = pool.functions.rampLastTime().call()
     duration = pool.functions.rampStopTime().call()
 
-    block = web3.eth.getBlock('latest')
+    block = web3.eth.get_block('latest')
     timestamp = block['timestamp']
     if span == 0 or span > timestamp or (block.timestamp - span < pool.functions.rampStep().call() and duration > timestamp):
         return pool.functions.amplification().call(), _vb_prod, packed_weights, False
@@ -540,7 +544,7 @@ def _unpack_weights(_packed: int) -> (int, int, int, int):
 
 
 def _unpack_wn(_packed: int, _num_tokens: int) -> int:
-    unsafe_mul(unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), _num_tokens)
+    return unsafe_mul(unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), _num_tokens)
 
 
 def _calc_supply(_num_tokens: int, _supply: int, _amplification: int, _vb_prod: int, _vb_sum: int, _up: bool) -> (int, int):
@@ -630,3 +634,9 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
         (_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)), PRECISION)
     if _ratio > limit:
         assert _ratio < _prev_ratio  # dev: ratio above upper band
+
+
+amounts0 = [int(0.1 * PRECISION), int(0.1 * PRECISION),
+            int(0.02 * PRECISION), int(0.01 * PRECISION)]
+result = get_add_lp(amounts0)
+print("result -", int(result))
