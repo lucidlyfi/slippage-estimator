@@ -3,8 +3,8 @@ from typing import List
 import json
 
 # loading web3 instance
-#  rpc_url = "https://eth.merkle.io"
-rpc_url = "http://127.0.0.1:8545"
+rpc_url = "https://eth.merkle.io"
+#  rpc_url = "http://127.0.0.1:8545"
 web3 = Web3(Web3.HTTPProvider(rpc_url))
 
 # loading pool abi
