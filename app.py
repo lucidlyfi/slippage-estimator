@@ -13,7 +13,7 @@ def get_output_token_route():
     return jsonify({'result': result})
 
 
-@app.route('/get_add_lp', methods=['GET'])
+@app.route('/get_add_lp', methods=['POST'])
 def get_add_lp_route():
     _amounts = request.json.get('_amounts')
     result = int(get_add_lp(_amounts))
