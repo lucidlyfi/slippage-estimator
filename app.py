@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from slippage_estimator import get_output_token, get_add_lp, get_remove_single_lp
+from slippage_estimator import get_output_token, get_add_lp, get_remove_single_lp, get_remove_lp
 
 app = Flask(__name__)
 
@@ -17,6 +17,13 @@ def get_output_token_route():
 def get_add_lp_route():
     _amounts = request.json.get('_amounts')
     result = int(get_add_lp(_amounts))
+    return jsonify({'result': result})
+
+
+@app.route('/get_remove_lp', methods=['GET'])
+def get_remove_lp_route():
+    _lp_amount = int(request.args.get('_lp_amount'))
+    result = get_remove_lp(_lp_amount)
     return jsonify({'result': result})
 
 

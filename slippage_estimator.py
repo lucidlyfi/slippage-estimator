@@ -4,7 +4,8 @@ import json
 
 # loading web3 instance
 rpc_url = "https://eth.merkle.io"
-#  rpc_url = "http://127.0.0.1:8545"
+# rpc_url = "http://127.0.0.1:8545"
+# rpc_url = "https://eth.rpc.blxrbdn.com"
 web3 = Web3(Web3.HTTPProvider(rpc_url))
 
 # loading pool abi
@@ -330,6 +331,7 @@ class LogExpMath:
 math = LogExpMath()
 
 
+@profile
 def get_output_token(_i: int, _j: int, _dx: int) -> int:
     num_tokens = pool.functions.numTokens().call()
     assert _i != _j  # dev: same input and output asset
@@ -379,6 +381,7 @@ def get_output_token(_i: int, _j: int, _dx: int) -> int:
     return (prev_vb_y - vb_y) * PRECISION / rates[1]
 
 
+@profile
 def get_add_lp(_amounts: List[int]) -> int:
     num_tokens = pool.functions.numTokens().call()
     assert len(_amounts) == num_tokens
@@ -470,6 +473,26 @@ def get_add_lp(_amounts: List[int]) -> int:
     return supply - prev_supply
 
 
+@profile
+def get_remove_lp(_lp_amount: int) -> List[int]:
+    amounts = []
+    num_tokens = pool.functions.numTokens().call()
+    prev_supply = pool.functions.supply().call()
+
+    assert (_lp_amount <= prev_supply)
+
+    for token in range(MAX_NUM_ASSETS):
+        if token == num_tokens:
+            break
+        prev_bal = pool.functions.virtualBalance(token).call()
+        dbal = prev_bal * _lp_amount // prev_supply
+        amount = dbal * PRECISION // pool.functions.rate(token).call()
+        amounts.append(amount)
+
+    return amounts
+
+
+@profile
 def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     num_tokens = pool.functions.numTokens().call()
     assert _token < num_tokens
@@ -523,6 +546,7 @@ def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     return dx
 
 
+@profile
 def _get_rates(_tokens: int, _vb_prod: int, _vb_sum: int) -> (int, int, int, int, List[int], List[int]):
     packed_weights = []
     rates = []
@@ -579,6 +603,7 @@ def _get_rates(_tokens: int, _vb_prod: int, _vb_sum: int) -> (int, int, int, int
     return supply, amplification, vb_prod, vb_sum, packed_weights, rates
 
 
+@profile
 def _get_packed_weights(_vb_prod: int, _vb_sum: int) -> (int, int, List[int], bool):
     packed_weights = []
     span = pool.functions.rampLastTime().call()
@@ -637,18 +662,22 @@ def _get_packed_weights(_vb_prod: int, _vb_sum: int) -> (int, int, List[int], bo
     return amplification, vb_prod, packed_weights, True
 
 
+@profile
 def _pack_weight(_weight: int, _target: int, _lower: int, _upper: int) -> int:
     return unsafe_div(_weight, WEIGHT_SCALE) | (unsafe_div(_target, WEIGHT_SCALE) << -TARGET_WEIGHT_SHIFT) | (unsafe_div(_lower, WEIGHT_SCALE) << -LOWER_BAND_SHIFT) | (unsafe_div(_upper, WEIGHT_SCALE) << -UPPER_BAND_SHIFT)
 
 
+@profile
 def _unpack_weights(_packed: int) -> (int, int, int, int):
     return unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), unsafe_mul((_packed >> -TARGET_WEIGHT_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE), unsafe_mul((_packed >> -LOWER_BAND_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE), unsafe_mul((_packed >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)
 
 
+@profile
 def _unpack_wn(_packed: int, _num_tokens: int) -> int:
     return unsafe_mul(unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), _num_tokens)
 
 
+@profile
 def _calc_supply(_num_tokens: int, _supply: int, _amplification: int, _vb_prod: int, _vb_sum: int, _up: bool) -> (int, int):
     # s[n+1] = (A sum / w^n - s^(n+1) w^n /prod^n)) / (A w^n - 1)
     #        = (l - s r) / d
@@ -686,6 +715,7 @@ def _calc_supply(_num_tokens: int, _supply: int, _amplification: int, _vb_prod: 
     raise "no convergence"
 
 
+@profile
 def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
     # y = x_j, sum' = sum(x_i, i != j), prod' = prod(x_i^w_i, i != j)
     # w = product(w_i), v_i = w_i n, f_i = 1/v_i
@@ -718,6 +748,7 @@ def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
     raise "no convergence"
 
 
+@profile
 def _check_bands(_prev_ratio, _ratio, _packed_weight):
     weight = unsafe_mul(_packed_weight & WEIGHT_MASK, WEIGHT_SCALE)
 
