@@ -1,8 +1,7 @@
-914598742930
 Wrote profile results to slippage_estimator.py.lprof
 Timer unit: 1e-06 s
 
-Total time: 20.2029 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: get_output_token at line 334
 
@@ -10,52 +9,52 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
 ==============================================================
    334                                           @profile
    335                                           def get_output_token(_i: int, _j: int, _dx: int) -> int:
-   336         1     690052.0 690052.0      3.4      num_tokens = pool.functions.numTokens().call()
-   337         1          1.0      1.0      0.0      assert _i != _j  # dev: same input and output asset
-   338         1          0.0      0.0      0.0      assert _i < num_tokens and _j < num_tokens  # dev: index out of bounds
-   339         1          1.0      1.0      0.0      assert _dx > 0  # dev: zero amount
+   336                                               num_tokens = pool.functions.numTokens().call()
+   337                                               assert _i != _j  # dev: same input and output asset
+   338                                               assert _i < num_tokens and _j < num_tokens  # dev: index out of bounds
+   339                                               assert _dx > 0  # dev: zero amount
    340                                           
    341                                               # update rates for from and to assets
-   342         1          0.0      0.0      0.0      supply = 0
-   343         1          0.0      0.0      0.0      amplification = 0
-   344         1          1.0      1.0      0.0      vb_prod = 0
-   345         1          0.0      0.0      0.0      vb_sum = 0
-   346         1     686756.0 686756.0      3.4      vb_prod, vb_sum = pool.functions.virtualBalanceProdSum().call()
-   347         1          0.0      0.0      0.0      packed_weights = []
-   348         1          1.0      1.0      0.0      rates = []
-   349         2   14737581.0    7e+06     72.9      supply, amplification, vb_prod, vb_sum, packed_weights, rates = _get_rates(
-   350         1          4.0      4.0      0.0          unsafe_add(_i, 1) | (unsafe_add(_j, 1) << 8), vb_prod, vb_sum)
-   351         1          1.0      1.0      0.0      prev_vb_sum = vb_sum
+   342                                               supply = 0
+   343                                               amplification = 0
+   344                                               vb_prod = 0
+   345                                               vb_sum = 0
+   346                                               vb_prod, vb_sum = pool.functions.virtualBalanceProdSum().call()
+   347                                               packed_weights = []
+   348                                               rates = []
+   349                                               supply, amplification, vb_prod, vb_sum, packed_weights, rates = _get_rates(
+   350                                                   unsafe_add(_i, 1) | (unsafe_add(_j, 1) << 8), vb_prod, vb_sum)
+   351                                               prev_vb_sum = vb_sum
    352                                           
-   353         4        316.0     79.0      0.0      prev_vb_x = pool.functions.virtualBalance(
-   354         3    1390047.0 463349.0      6.9          _i).call() * rates[0] / pool.functions.rate(_i).call()
-   355         1         46.0     46.0      0.0      wn_x = _unpack_wn(packed_weights[_i], num_tokens)
+   353                                               prev_vb_x = pool.functions.virtualBalance(
+   354                                                   _i).call() * rates[0] / pool.functions.rate(_i).call()
+   355                                               wn_x = _unpack_wn(packed_weights[_i], num_tokens)
    356                                           
-   357         4        763.0    190.8      0.0      prev_vb_y = pool.functions.virtualBalance(
-   358         3    1576439.0 525479.7      7.8          _j).call() * rates[1] / pool.functions.rate(_j).call()
-   359         1         19.0     19.0      0.0      wn_y = _unpack_wn(packed_weights[_j], num_tokens)
+   357                                               prev_vb_y = pool.functions.virtualBalance(
+   358                                                   _j).call() * rates[1] / pool.functions.rate(_j).call()
+   359                                               wn_y = _unpack_wn(packed_weights[_j], num_tokens)
    360                                           
-   361         1    1119972.0    1e+06      5.5      dx_fee = _dx * pool.functions.swapFeeRate().call() / PRECISION
-   362         1          2.0      2.0      0.0      dvb_x = (_dx - dx_fee) * rates[0] / PRECISION
-   363         1          1.0      1.0      0.0      vb_x = prev_vb_x + dvb_x
+   361                                               dx_fee = _dx * pool.functions.swapFeeRate().call() / PRECISION
+   362                                               dvb_x = (_dx - dx_fee) * rates[0] / PRECISION
+   363                                               vb_x = prev_vb_x + dvb_x
    364                                           
    365                                               # update x_i and remove x_j from variables
-   366         2        153.0     76.5      0.0      vb_prod = vb_prod * math._pow_up(int(prev_vb_y), (wn_y)) / \
-   367         1         72.0     72.0      0.0          math._pow_down(int(vb_x * PRECISION // prev_vb_x), int(wn_x))
-   368         1          2.0      2.0      0.0      vb_sum = vb_sum + dvb_x - prev_vb_y
+   366                                               vb_prod = vb_prod * math._pow_up(int(prev_vb_y), (wn_y)) / \
+   367                                                   math._pow_down(int(vb_x * PRECISION // prev_vb_x), int(wn_x))
+   368                                               vb_sum = vb_sum + dvb_x - prev_vb_y
    369                                           
    370                                               # calulate new balance of out token
-   371         2        626.0    313.0      0.0      vb_y = _calc_vb(int(wn_y), int(prev_vb_y), int(supply),
-   372         1          1.0      1.0      0.0                      int(amplification), int(vb_prod), int(vb_sum))
-   373         1          2.0      2.0      0.0      vb_sum += vb_y + dx_fee * rates[0] // PRECISION
+   371                                               vb_y = _calc_vb(int(wn_y), int(prev_vb_y), int(supply),
+   372                                                               int(amplification), int(vb_prod), int(vb_sum))
+   373                                               vb_sum += vb_y + dx_fee * rates[0] // PRECISION
    374                                           
    375                                               # check bands
-   376         2         13.0      6.5      0.0      _check_bands(prev_vb_x * PRECISION // prev_vb_sum,
-   377         1          1.0      1.0      0.0                   vb_x * PRECISION // vb_sum, packed_weights[_i])
-   378         2          7.0      3.5      0.0      _check_bands(prev_vb_y * PRECISION // prev_vb_sum,
-   379         1          0.0      0.0      0.0                   vb_y * PRECISION // vb_sum, packed_weights[_j])
+   376                                               _check_bands(prev_vb_x * PRECISION // prev_vb_sum,
+   377                                                            vb_x * PRECISION // vb_sum, packed_weights[_i])
+   378                                               _check_bands(prev_vb_y * PRECISION // prev_vb_sum,
+   379                                                            vb_y * PRECISION // vb_sum, packed_weights[_j])
    380                                           
-   381         1          1.0      1.0      0.0      return (prev_vb_y - vb_y) * PRECISION / rates[1]
+   381                                               return (prev_vb_y - vb_y) * PRECISION / rates[1]
 
 Total time: 0 s
 File: slippage_estimator.py
@@ -237,7 +236,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
    545                                           
    546                                               return dx
 
-Total time: 14.7374 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: _get_rates at line 549
 
@@ -245,61 +244,61 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
 ==============================================================
    549                                           @profile
    550                                           def _get_rates(_tokens: int, _vb_prod: int, _vb_sum: int) -> (int, int, int, int, List[int], List[int]):
-   551         1          0.0      0.0      0.0      packed_weights = []
-   552         1          0.0      0.0      0.0      rates = []
+   551                                               packed_weights = []
+   552                                               rates = []
    553                                           
-   554         1          1.0      1.0      0.0      amplification = 0
-   555         1          0.0      0.0      0.0      vb_prod = 0
-   556         1          0.0      0.0      0.0      vb_sum = _vb_sum
-   557         2    2870969.0    1e+06     19.5      amplification, vb_prod, _packed_weights, updated = _get_packed_weights(
-   558         1          0.0      0.0      0.0          _vb_prod, _vb_sum)
+   554                                               amplification = 0
+   555                                               vb_prod = 0
+   556                                               vb_sum = _vb_sum
+   557                                               amplification, vb_prod, _packed_weights, updated = _get_packed_weights(
+   558                                                   _vb_prod, _vb_sum)
    559                                           
-   560         1     682239.0 682239.0      4.6      num_tokens = pool.functions.numTokens().call()
+   560                                               num_tokens = pool.functions.numTokens().call()
    561                                           
-   562         1          0.0      0.0      0.0      if not updated:
-   563         5          4.0      0.8      0.0          for token in range(MAX_NUM_ASSETS):
-   564         5          2.0      0.4      0.0              if token == num_tokens:
-   565         1          0.0      0.0      0.0                  break
-   566         4    2780973.0 695243.2     18.9              packed_weights.append(pool.functions.packedWeight(token).call())
+   562                                               if not updated:
+   563                                                   for token in range(MAX_NUM_ASSETS):
+   564                                                       if token == num_tokens:
+   565                                                           break
+   566                                                       packed_weights.append(pool.functions.packedWeight(token).call())
    567                                           
-   568         3          5.0      1.7      0.0      for i in range(MAX_NUM_ASSETS):
-   569         3         15.0      5.0      0.0          token = (_tokens >> unsafe_mul(8, i)) & 255
-   570         3          1.0      0.3      0.0          if token == 0 or token > num_tokens:
-   571         1          1.0      1.0      0.0              break
-   572         2          3.0      1.5      0.0          token = unsafe_sub(token, 1)
-   573         2    1376445.0 688222.5      9.3          prev_rate = pool.functions.rate(token).call()
+   568                                               for i in range(MAX_NUM_ASSETS):
+   569                                                   token = (_tokens >> unsafe_mul(8, i)) & 255
+   570                                                   if token == 0 or token > num_tokens:
+   571                                                       break
+   572                                                   token = unsafe_sub(token, 1)
+   573                                                   prev_rate = pool.functions.rate(token).call()
    574                                           
-   575         2    1373016.0 686508.0      9.3          provider_address = pool.functions.rateProviders(token).call()
-   576         4      13607.0   3401.8      0.1          provider = web3.eth.contract(
-   577         2          2.0      1.0      0.0              address=provider_address, abi=rate_provider_abi)
-   578         6        374.0     62.3      0.0          rate = provider.functions.rate(
-   579         4    3137039.0 784259.8     21.3              pool.functions.tokens(token).call()).call()
-   580         2          0.0      0.0      0.0          assert rate > 0
-   581         2          2.0      1.0      0.0          rates.append(rate)
+   575                                                   provider_address = pool.functions.rateProviders(token).call()
+   576                                                   provider = web3.eth.contract(
+   577                                                       address=provider_address, abi=rate_provider_abi)
+   578                                                   rate = provider.functions.rate(
+   579                                                       pool.functions.tokens(token).call()).call()
+   580                                                   assert rate > 0
+   581                                                   rates.append(rate)
    582                                           
-   583         2          0.0      0.0      0.0          if rate == prev_rate:
+   583                                                   if rate == prev_rate:
    584                                                       continue
    585                                           
-   586         2          1.0      0.5      0.0          if prev_rate > 0 and vb_sum > 0:
+   586                                                   if prev_rate > 0 and vb_sum > 0:
    587                                                       # factor out old rate and factor in new
-   588         2         27.0     13.5      0.0              wn = _unpack_wn(packed_weights[token], num_tokens)
-   589         6          6.0      1.0      0.0              vb_prod = vb_prod * \
-   590         4         91.0     22.8      0.0                  math._pow_up(int(prev_rate * PRECISION // rate),
-   591         4          2.0      0.5      0.0                               wn) / PRECISION
+   588                                                       wn = _unpack_wn(packed_weights[token], num_tokens)
+   589                                                       vb_prod = vb_prod * \
+   590                                                           math._pow_up(int(prev_rate * PRECISION // rate),
+   591                                                                        wn) / PRECISION
    592                                           
-   593         2    1814981.0 907490.5     12.3              prev_bal = pool.functions.virtualBalance(token).call()
-   594         2          5.0      2.5      0.0              bal = prev_bal * rate // prev_rate
-   595         2          5.0      2.5      0.0              vb_sum = vb_sum + bal - prev_bal
+   593                                                       prev_bal = pool.functions.virtualBalance(token).call()
+   594                                                       bal = prev_bal * rate // prev_rate
+   595                                                       vb_sum = vb_sum + bal - prev_bal
    596                                           
-   597         1          2.0      2.0      0.0      if not updated and vb_prod == _vb_prod and vb_sum == _vb_sum:
+   597                                               if not updated and vb_prod == _vb_prod and vb_sum == _vb_sum:
    598                                                   return pool.functions.supply().call(), amplification, vb_prod, vb_sum, packed_weights, rates
    599                                           
-   600         1          1.0      1.0      0.0      supply = 0
-   601         2        146.0     73.0      0.0      (supply, vb_prod) = _calc_supply(int(num_tokens),
-   602         1     687481.0 687481.0      4.7                                       int(pool.functions.supply().call()), int(amplification), int(vb_prod), int(vb_sum), True)
-   603         1          1.0      1.0      0.0      return supply, amplification, vb_prod, vb_sum, packed_weights, rates
+   600                                               supply = 0
+   601                                               (supply, vb_prod) = _calc_supply(int(num_tokens),
+   602                                                                                int(pool.functions.supply().call()), int(amplification), int(vb_prod), int(vb_sum), True)
+   603                                               return supply, amplification, vb_prod, vb_sum, packed_weights, rates
 
-Total time: 2.87089 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: _get_packed_weights at line 606
 
@@ -307,14 +306,14 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
 ==============================================================
    606                                           @profile
    607                                           def _get_packed_weights(_vb_prod: int, _vb_sum: int) -> (int, int, List[int], bool):
-   608         1          1.0      1.0      0.0      packed_weights = []
-   609         1     849592.0 849592.0     29.6      span = pool.functions.rampLastTime().call()
-   610         1     688733.0 688733.0     24.0      duration = pool.functions.rampStopTime().call()
+   608                                               packed_weights = []
+   609                                               span = pool.functions.rampLastTime().call()
+   610                                               duration = pool.functions.rampStopTime().call()
    611                                           
-   612         1     651284.0 651284.0     22.7      block = web3.eth.get_block('latest')
-   613         1          0.0      0.0      0.0      timestamp = block['timestamp']
-   614         1          0.0      0.0      0.0      if span == 0 or span > timestamp or (block.timestamp - span < pool.functions.rampStep().call() and duration > timestamp):
-   615         1     681281.0 681281.0     23.7          return pool.functions.amplification().call(), _vb_prod, packed_weights, False
+   612                                               block = web3.eth.get_block('latest')
+   613                                               timestamp = block['timestamp']
+   614                                               if span == 0 or span > timestamp or (block.timestamp - span < pool.functions.rampStep().call() and duration > timestamp):
+   615                                                   return pool.functions.amplification().call(), _vb_prod, packed_weights, False
    616                                           
    617                                               if timestamp < duration:
    618                                                   # ramp in progress
@@ -383,7 +382,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
    671                                           def _unpack_weights(_packed: int) -> (int, int, int, int):
    672                                               return unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), unsafe_mul((_packed >> -TARGET_WEIGHT_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE), unsafe_mul((_packed >> -LOWER_BAND_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE), unsafe_mul((_packed >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)
 
-Total time: 2.5e-05 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: _unpack_wn at line 675
 
@@ -391,9 +390,9 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
 ==============================================================
    675                                           @profile
    676                                           def _unpack_wn(_packed: int, _num_tokens: int) -> int:
-   677         4         25.0      6.2    100.0      return unsafe_mul(unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), _num_tokens)
+   677                                               return unsafe_mul(unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), _num_tokens)
 
-Total time: 8.1e-05 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: _calc_supply at line 680
 
@@ -404,39 +403,39 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
    682                                               # s[n+1] = (A sum / w^n - s^(n+1) w^n /prod^n)) / (A w^n - 1)
    683                                               #        = (l - s r) / d
    684                                           
-   685         1          1.0      1.0      1.2      l = _amplification
-   686         1          1.0      1.0      1.2      d = l - PRECISION
-   687         1          0.0      0.0      0.0      s = _supply
-   688         1          0.0      0.0      0.0      r = _vb_prod
-   689         1          1.0      1.0      1.2      l = l * _vb_sum
+   685                                               l = _amplification
+   686                                               d = l - PRECISION
+   687                                               s = _supply
+   688                                               r = _vb_prod
+   689                                               l = l * _vb_sum
    690                                           
-   691         1          0.0      0.0      0.0      num_tokens = _num_tokens
-   692        13          4.0      0.3      4.9      for _ in range(255):
-   693        39         10.0      0.3     12.3          sp = unsafe_div(unsafe_sub(
-   694        26          4.0      0.2      4.9              l, unsafe_mul(s, r)), d)  # (l - s * r) / d
-   695        65          5.0      0.1      6.2          for i in range(MAX_NUM_ASSETS):
-   696        65          7.0      0.1      8.6              if i == num_tokens:
-   697        13          1.0      0.1      1.2                  break
-   698        52         30.0      0.6     37.0              r = unsafe_div(unsafe_mul(r, sp), s)  # r * sp / s
-   699        13          0.0      0.0      0.0          if sp >= s:
-   700         7          5.0      0.7      6.2              if (sp - s) * PRECISION / s <= MAX_POW_REL_ERR:
-   701         1          0.0      0.0      0.0                  if _up:
-   702         1          2.0      2.0      2.5                      sp += sp * MAX_POW_REL_ERR / PRECISION
+   691                                               num_tokens = _num_tokens
+   692                                               for _ in range(255):
+   693                                                   sp = unsafe_div(unsafe_sub(
+   694                                                       l, unsafe_mul(s, r)), d)  # (l - s * r) / d
+   695                                                   for i in range(MAX_NUM_ASSETS):
+   696                                                       if i == num_tokens:
+   697                                                           break
+   698                                                       r = unsafe_div(unsafe_mul(r, sp), s)  # r * sp / s
+   699                                                   if sp >= s:
+   700                                                       if (sp - s) * PRECISION / s <= MAX_POW_REL_ERR:
+   701                                                           if _up:
+   702                                                               sp += sp * MAX_POW_REL_ERR / PRECISION
    703                                                           else:
    704                                                               sp -= sp * MAX_POW_REL_ERR / PRECISION
-   705         1          0.0      0.0      0.0                  return sp, r
+   705                                                           return sp, r
    706                                                   else:
-   707         6          5.0      0.8      6.2              if (s - sp) * PRECISION / s <= MAX_POW_REL_ERR:
+   707                                                       if (s - sp) * PRECISION / s <= MAX_POW_REL_ERR:
    708                                                           if _up:
    709                                                               sp += sp * MAX_POW_REL_ERR / PRECISION
    710                                                           else:
    711                                                               sp -= sp * MAX_POW_REL_ERR / PRECISION
    712                                                           return sp, r
-   713        12          5.0      0.4      6.2          s = sp
+   713                                                   s = sp
    714                                           
    715                                               raise "no convergence"
 
-Total time: 0.000561 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: _calc_vb at line 718
 
@@ -452,29 +451,29 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
    725                                               # y[n+1] = y[n] - g(y[n])/g'(y[n])
    726                                               #        = (y[n]^2 + b (1 - f_j) y[n] + c f_j y[n]^(1 - v_j)) / (f_j + 1) y[n] + b)
    727                                           
-   728         1          2.0      2.0      0.4      d = _supply
-   729         1          1.0      1.0      0.2      b = d * PRECISION / _amplification  # actually b + D
-   730         1          1.0      1.0      0.2      c = _vb_prod * b / PRECISION
-   731         1          1.0      1.0      0.2      b += _vb_sum
-   732         1          1.0      1.0      0.2      f = PRECISION * PRECISION / _wn
+   728                                               d = _supply
+   729                                               b = d * PRECISION / _amplification  # actually b + D
+   730                                               c = _vb_prod * b / PRECISION
+   731                                               b += _vb_sum
+   732                                               f = PRECISION * PRECISION / _wn
    733                                           
-   734         1          0.0      0.0      0.0      y = _y
-   735        10          9.0      0.9      1.6      for _ in range(255):
-   736        50        520.0     10.4     92.7          yp = (y + b + d * f / PRECISION + c * f / math._pow_up(int(y), int(_wn)) -
-   737        40         10.0      0.2      1.8                b * f / PRECISION - d) * y / (f * y / PRECISION + y + b - d)
-   738        10          6.0      0.6      1.1          if yp >= y:
-   739         6          4.0      0.7      0.7              if (yp - y) * PRECISION / y <= MAX_POW_REL_ERR:
-   740         1          1.0      1.0      0.2                  yp += yp * MAX_POW_REL_ERR / PRECISION
-   741         1          0.0      0.0      0.0                  return yp
+   734                                               y = _y
+   735                                               for _ in range(255):
+   736                                                   yp = (y + b + d * f / PRECISION + c * f / math._pow_up(int(y), int(_wn)) -
+   737                                                         b * f / PRECISION - d) * y / (f * y / PRECISION + y + b - d)
+   738                                                   if yp >= y:
+   739                                                       if (yp - y) * PRECISION / y <= MAX_POW_REL_ERR:
+   740                                                           yp += yp * MAX_POW_REL_ERR / PRECISION
+   741                                                           return yp
    742                                                   else:
-   743         4          3.0      0.8      0.5              if (y - yp) * PRECISION / y <= MAX_POW_REL_ERR:
+   743                                                       if (y - yp) * PRECISION / y <= MAX_POW_REL_ERR:
    744                                                           yp += yp * MAX_POW_REL_ERR / PRECISION
    745                                                           return yp
-   746         9          2.0      0.2      0.4          y = yp
+   746                                                   y = yp
    747                                           
    748                                               raise "no convergence"
 
-Total time: 1e-05 s
+Total time: 0 s
 File: slippage_estimator.py
 Function: _check_bands at line 751
 
@@ -482,21 +481,21 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
 ==============================================================
    751                                           @profile
    752                                           def _check_bands(_prev_ratio, _ratio, _packed_weight):
-   753         2          2.0      1.0     20.0      weight = unsafe_mul(_packed_weight & WEIGHT_MASK, WEIGHT_SCALE)
+   753                                               weight = unsafe_mul(_packed_weight & WEIGHT_MASK, WEIGHT_SCALE)
    754                                           
    755                                               # lower limit check
-   756         4          1.0      0.2     10.0      limit = unsafe_mul(
-   757         2          1.0      0.5     10.0          (_packed_weight >> -LOWER_BAND_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE)
-   758         2          0.0      0.0      0.0      if limit > weight:
-   759         2          0.0      0.0      0.0          limit = 0
+   756                                               limit = unsafe_mul(
+   757                                                   (_packed_weight >> -LOWER_BAND_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE)
+   758                                               if limit > weight:
+   759                                                   limit = 0
    760                                               else:
    761                                                   limit = unsafe_sub(weight, limit)
-   762         2          0.0      0.0      0.0      if _ratio < limit:
+   762                                               if _ratio < limit:
    763                                                   assert _ratio > _prev_ratio  # dev: ratio below lower band
    764                                           
    765                                               # upper limit check
-   766         6          6.0      1.0     60.0      limit = min(unsafe_add(weight, unsafe_mul(
-   767         4          0.0      0.0      0.0          (_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)), PRECISION)
-   768         2          0.0      0.0      0.0      if _ratio > limit:
+   766                                               limit = min(unsafe_add(weight, unsafe_mul(
+   767                                                   (_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)), PRECISION)
+   768                                               if _ratio > limit:
    769                                                   assert _ratio < _prev_ratio  # dev: ratio above upper band
 

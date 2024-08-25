@@ -2,9 +2,15 @@ from web3 import Web3
 from typing import List
 import json
 
+try:
+    profile
+except NameError:
+    def profile(func):
+        return func
+
 # loading web3 instance
-rpc_url = "https://eth.merkle.io"
-# rpc_url = "http://127.0.0.1:8545"
+#  rpc_url = "https://eth.merkle.io"
+rpc_url = "http://127.0.0.1:8545"
 # rpc_url = "https://eth.rpc.blxrbdn.com"
 web3 = Web3(Web3.HTTPProvider(rpc_url))
 
@@ -523,6 +529,12 @@ def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     vb_sum = vb_sum - prev_vb
 
     #  calculate new balance of token
+    print("wn -", int(wn))
+    print("prev_vb -", int(prev_vb))
+    print("supply -", int(supply))
+    print("amplification -", int(amplification))
+    print("vb_prod -", int(vb_prod))
+    print("vb_sum -", int(vb_sum))
     vb = _calc_vb(int(wn), int(prev_vb), int(supply), int(
         amplification), int(vb_prod), int(vb_sum))
     dvb = prev_vb - vb
@@ -726,22 +738,22 @@ def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
     #        = (y[n]^2 + b (1 - f_j) y[n] + c f_j y[n]^(1 - v_j)) / (f_j + 1) y[n] + b)
 
     d = _supply
-    b = d * PRECISION / _amplification  # actually b + D
-    c = _vb_prod * b / PRECISION
+    b = d * PRECISION // _amplification  # actually b + D
+    c = _vb_prod * b // PRECISION
     b += _vb_sum
-    f = PRECISION * PRECISION / _wn
+    f = PRECISION * PRECISION // _wn
 
     y = _y
     for _ in range(255):
-        yp = (y + b + d * f / PRECISION + c * f / math._pow_up(int(y), int(_wn)) -
-              b * f / PRECISION - d) * y / (f * y / PRECISION + y + b - d)
+        yp = (y + b + d * f // PRECISION + c * f // math._pow_up(int(y), int(_wn)) -
+              b * f // PRECISION - d) * y // (f * y // PRECISION + y + b - d)
         if yp >= y:
-            if (yp - y) * PRECISION / y <= MAX_POW_REL_ERR:
-                yp += yp * MAX_POW_REL_ERR / PRECISION
+            if (yp - y) * PRECISION // y <= MAX_POW_REL_ERR:
+                yp += yp * MAX_POW_REL_ERR // PRECISION
                 return yp
         else:
-            if (y - yp) * PRECISION / y <= MAX_POW_REL_ERR:
-                yp += yp * MAX_POW_REL_ERR / PRECISION
+            if (y - yp) * PRECISION // y <= MAX_POW_REL_ERR:
+                yp += yp * MAX_POW_REL_ERR // PRECISION
                 return yp
         y = yp
 
@@ -769,11 +781,12 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
         assert _ratio < _prev_ratio  # dev: ratio above upper band
 
 
-#  amounts0 = [int(0.1 * PRECISION), int(0.1 * PRECISION),
-#              int(0.02 * PRECISION), int(0.01 * PRECISION)]
+# amounts0 = [int(0.1 * PRECISION), int(0.1 * PRECISION),
+#             int(0.02 * PRECISION), int(0.01 * PRECISION)]
 #  result = get_add_lp(amounts0)
 #  print("result -", int(result))
 
-#  print(int(get_remove_single_lp(1, 1e8)))
-
-print(int(get_output_token(0, 1, 1e12)))
+#  print(int(get_add_lp([int(0.1 * PRECISION), int(0.1 * PRECISION),
+#       int(0.02 * PRECISION), int(0.01 * PRECISION)])))
+print(int(get_remove_single_lp(1, 1e8)))
+#  print(int(get_output_token(0, 1, 1e12)))
