@@ -529,12 +529,6 @@ def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     vb_sum = vb_sum - prev_vb
 
     #  calculate new balance of token
-    print("wn -", int(wn))
-    print("prev_vb -", int(prev_vb))
-    print("supply -", int(supply))
-    print("amplification -", int(amplification))
-    print("vb_prod -", int(vb_prod))
-    print("vb_sum -", int(vb_sum))
     vb = _calc_vb(int(wn), int(prev_vb), int(supply), int(
         amplification), int(vb_prod), int(vb_sum))
     dvb = prev_vb - vb
