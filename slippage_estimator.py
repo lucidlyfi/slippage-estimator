@@ -1,4 +1,5 @@
 from web3 import Web3
+import asyncio
 from typing import List
 import json
 
@@ -775,12 +776,12 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
         assert _ratio < _prev_ratio  # dev: ratio above upper band
 
 
-# amounts0 = [int(0.1 * PRECISION), int(0.1 * PRECISION),
-#             int(0.02 * PRECISION), int(0.01 * PRECISION)]
-#  result = get_add_lp(amounts0)
-#  print("result -", int(result))
+amounts0 = [int(0.1 * PRECISION), int(0),
+            int(0), int(0)]
+result = get_add_lp(amounts0)
+print("result -", int(result))
 
 #  print(int(get_add_lp([int(0.1 * PRECISION), int(0.1 * PRECISION),
 #       int(0.02 * PRECISION), int(0.01 * PRECISION)])))
-print(int(get_remove_single_lp(1, 1e8)))
-#  print(int(get_output_token(0, 1, 1e12)))
+# print(int(get_remove_single_lp(1, 1e8)))
+# print(int(get_output_token(0, 1, 1e12)))
