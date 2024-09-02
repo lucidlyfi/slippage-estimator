@@ -1,20 +1,14 @@
 from web3 import AsyncWeb3
 import asyncio
+import os
 from typing import List
 import json
+from dotenv import load_dotenv
 
-try:
-    profile
-except NameError:
-
-    def profile(func):
-        return func
-
+load_dotenv()
 
 # loading web3 instance
-rpc_url = "https://eth.merkle.io"
-# rpc_url = "http://127.0.0.1:8545"
-# rpc_url = "https://eth.rpc.blxrbdn.com"
+rpc_url = os.getenv("RPC_URL")
 web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(rpc_url))
 
 # loading pool abi
@@ -34,18 +28,18 @@ pool = web3.eth.contract(address=pool_address, abi=pool_abi)
 # rate provider abi
 rate_provider_abi = '[{"inputs":[],"name":"RateProvider__InvalidParams","type":"error"},{"inputs":[{"internalType":"address","name":"token_","type":"address"}],"name":"rate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'
 
-tokens = [
-    "0xD9A442856C234a39a81a089C06451EBAa4306a72",
-    "0xEEda34A377dD0ca676b9511EE1324974fA8d980D",
-    "0x39F5b252dE249790fAEd0C2F05aBead56D2088e1",
-    "0xeC3B2CC4C6a8fC9a13620A91622483b56E2E6fD9",
+tokens_addresses = [
+    "0xD9A442856C234a39a81a089C06451EBAa4306a72",  # pufEth
+    "0xEEda34A377dD0ca676b9511EE1324974fA8d980D",  # pufEth/wstEth
+    "0x39F5b252dE249790fAEd0C2F05aBead56D2088e1",  # weth/pufEth
+    "0x66017371c032Cd5a67Fec6913A9e37d5bd1C690c",  # y-PT-auto-rolling pufEth
 ]
 
 rate_providers = [
     "0xC4EF2c4B4eD79CD7639AF070d4a6A82eEF5edd4f",
     "0xC4EF2c4B4eD79CD7639AF070d4a6A82eEF5edd4f",
     "0x60d4BCab4A8b1849Ca19F6B4a6EaB26A66496267",
-    "0x3C730BC8Ff9d7D51395c180c409597ae80A63056",
+    "0x73717f7FF55E0acDB1F5f5789D13d7c40A08E4CA",
 ]
 
 #  math stuff
@@ -133,8 +127,7 @@ class LogExpMath:
             return 0
         return unsafe_add(
             unsafe_add(
-                p, unsafe_div(unsafe_sub(unsafe_mul(
-                    p, MAX_POW_REL_ERR), 1), PRECISION)
+                p, unsafe_div(unsafe_sub(unsafe_mul(p, MAX_POW_REL_ERR), 1), PRECISION)
             ),
             1,
         )
@@ -145,8 +138,7 @@ class LogExpMath:
         if p == 0:
             return 0
         e = unsafe_add(
-            unsafe_div(unsafe_sub(unsafe_mul(
-                p, MAX_POW_REL_ERR), 1), PRECISION), 1
+            unsafe_div(unsafe_sub(unsafe_mul(p, MAX_POW_REL_ERR), 1), PRECISION), 1
         )
         if p < e:
             return 0
@@ -352,43 +344,78 @@ class LogExpMath:
 math = LogExpMath()
 
 
-@profile
 async def get_output_token(_i: int, _j: int, _dx: int) -> int:
-    #  num_tokens = pool.functions.numTokens().call()
     num_tokens = 4
     assert _i != _j  # dev: same input and output asset
     assert _i < num_tokens and _j < num_tokens  # dev: index out of bounds
     assert _dx > 0  # dev: zero amount
 
+    batch = web3.batch_requests()
+
+    [batch.add(pool.functions.rate(t).call()) for t in range(4)]
+    [batch.add(pool.functions.virtualBalance(t).call()) for t in range(4)]
+    [batch.add(pool.functions.packedWeight(t).call()) for t in range(4)]
+    [batch.add(pool.functions.weight(t).call()) for t in range(4)]
+
+    for i in range(num_tokens):
+        provider = web3.eth.contract(address=rate_providers[i], abi=rate_provider_abi)
+        batch.add(provider.functions.rate(tokens_addresses[i]).call())
+
+    batch.add(pool.functions.supply().call())
+    batch.add(pool.functions.virtualBalanceProdSum().call())
+    batch.add(pool.functions.rampLastTime().call())
+    batch.add(pool.functions.rampStopTime().call())
+    batch.add(pool.functions.rampStep().call())
+    batch.add(pool.functions.amplification().call())
+    batch.add(pool.functions.targetAmplification().call())
+    batch.add(web3.eth.get_block("latest"))
+
+    responses = await batch.async_execute()
+
+    prev_rates = responses[:4]
+    virtual_balances = responses[4:8]
+    packed_weights = responses[8:12]
+    weights = responses[12:16]
+    latest_rates = responses[16:20]
+    supply = responses[20]
+    vb_prod, vb_sum = responses[21]
+    span = responses[22]
+    duration = responses[23]
+    ramp_step = responses[24]
+    amplification = responses[25]
+    target_amplification = responses[26]
+    timestamp = responses[27]["timestamp"]
+
     # update rates for from and to assets
-    supply = 0
-    amplification = 0
-    vb_prod = 0
-    vb_sum = 0
-    vb_prod, vb_sum = await pool.functions.virtualBalanceProdSum().call()
-    packed_weights = []
     rates = []
     supply, amplification, vb_prod, vb_sum, packed_weights, rates = await _get_rates(
-        unsafe_add(_i, 1) | (unsafe_add(_j, 1) << 8), vb_prod, vb_sum
+        unsafe_add(_i, 1) | (unsafe_add(_j, 1) << 8),
+        prev_rates,
+        latest_rates,
+        weights,
+        packed_weights,
+        supply,
+        virtual_balances,
+        vb_prod,
+        vb_sum,
+        span,
+        duration,
+        timestamp,
+        ramp_step,
+        amplification,
+        target_amplification,
     )
+
     prev_vb_sum = vb_sum
 
-    prev_vb_x = (
-        await pool.functions.virtualBalance(_i).call()
-        * rates[0]
-        / (await pool.functions.rate(_i).call())
-    )
+    prev_vb_x = virtual_balances[_i] * rates[_i] // (prev_rates[_i])
     wn_x = _unpack_wn(packed_weights[_i], num_tokens)
 
-    prev_vb_y = (
-        await pool.functions.virtualBalance(_j).call()
-        * rates[1]
-        / (await pool.functions.rate(_j).call())
-    )
+    prev_vb_y = virtual_balances[_j] * rates[_j] / (prev_rates[_j])
     wn_y = _unpack_wn(packed_weights[_j], num_tokens)
 
-    dx_fee = _dx * pool.functions.swapFeeRate().call() / PRECISION
-    dvb_x = (_dx - dx_fee) * rates[0] / PRECISION
+    dx_fee = int(_dx * 300000000000000 // PRECISION)
+    dvb_x = (_dx - dx_fee) * rates[_i] / PRECISION
     vb_x = prev_vb_x + dvb_x
 
     # update x_i and remove x_j from variables
@@ -408,7 +435,7 @@ async def get_output_token(_i: int, _j: int, _dx: int) -> int:
         int(vb_prod),
         int(vb_sum),
     )
-    vb_sum += vb_y + dx_fee * rates[0] // PRECISION
+    vb_sum += vb_y + dx_fee * rates[_i] // PRECISION
 
     # check bands
     _check_bands(
@@ -422,24 +449,27 @@ async def get_output_token(_i: int, _j: int, _dx: int) -> int:
         packed_weights[_j],
     )
 
-    return (prev_vb_y - vb_y) * PRECISION / rates[1]
+    return (prev_vb_y - vb_y) * PRECISION / rates[_j]
 
 
-@profile
 async def get_add_lp(_amounts: List[int]) -> int:
-    batch = web3.batch_requests()
+    num_tokens = 4
+    assert len(_amounts) == num_tokens
 
-    rates = []
     virtual_balances = []
     packed_weights = []
     weights = []
 
-    print("preparing batch")
+    batch = web3.batch_requests()
 
     [batch.add(pool.functions.rate(t).call()) for t in range(4)]
     [batch.add(pool.functions.virtualBalance(t).call()) for t in range(4)]
     [batch.add(pool.functions.packedWeight(t).call()) for t in range(4)]
     [batch.add(pool.functions.weight(t).call()) for t in range(4)]
+
+    for i in range(num_tokens):
+        provider = web3.eth.contract(address=rate_providers[i], abi=rate_provider_abi)
+        batch.add(provider.functions.rate(tokens_addresses[i]).call())
 
     batch.add(pool.functions.supply().call())
     batch.add(pool.functions.virtualBalanceProdSum().call())
@@ -452,35 +482,20 @@ async def get_add_lp(_amounts: List[int]) -> int:
 
     responses = await batch.async_execute()
 
-    rates = responses[:4]
+    prev_rates = responses[:4]
     virtual_balances = responses[4:8]
     packed_weights = responses[8:12]
     weights = responses[12:16]
-    supply = responses[16]
-    vb_prod, vb_sum = responses[17]
-    span = responses[18]
-    duration = responses[19]
-    ramp_step = responses[20]
-    amplification = responses[21]
-    target_amplification = responses[22]
-    timestamp = responses[23]["timestamp"]
+    latest_rates = responses[16:20]
+    supply = responses[20]
+    vb_prod, vb_sum = responses[21]
+    span = responses[22]
+    duration = responses[23]
+    ramp_step = responses[24]
+    amplification = responses[25]
+    target_amplification = responses[26]
+    timestamp = responses[27]["timestamp"]
 
-    print(f"Rates: {rates}")
-    print(f"Virtual Balances: {virtual_balances}")
-    print(f"Packed Weights: {packed_weights}")
-    print(f"Weights: {weights}")
-    print(f"Supply: {supply}")
-    print(f"Virtual Balance Product: {vb_prod}")
-    print(f"Virtual Balance Sum: {vb_sum}")
-    print(f"Span: {span}")
-    print(f"Duration: {duration}")
-    print(f"Ramp Step: {ramp_step}")
-    print(f"Amplification: {amplification}")
-    print(f"Target Amplification: {target_amplification}")
-    print(f"Timestamp: {timestamp}")
-
-    num_tokens = 4
-    assert len(_amounts) == num_tokens
     assert vb_sum > 0
 
     # find lowest relative increase in balance
@@ -495,23 +510,24 @@ async def get_add_lp(_amounts: List[int]) -> int:
             sh = unsafe_add(sh, 8)
             if vb_sum > 0 and lowest > 0:
                 lowest = min(
-                    _amounts[token] *
-                    rates[token] // virtual_balances[token], lowest
+                    _amounts[token] * prev_rates[token] // virtual_balances[token],
+                    lowest,
                 )
         else:
             lowest = 0
     assert sh > 0
 
     # update rates
-    prev_supply = 0
-    amplification = 0
-    packed_weights = []
-    rates = []
+    prev_supply = supply
+    rates = latest_rates
 
     prev_supply, amplification, vb_prod, vb_sum, packed_weights, rates = (
         await _get_rates(
             tokens,
+            prev_rates,
+            latest_rates,
             weights,
+            packed_weights,
             supply,
             virtual_balances,
             vb_prod,
@@ -540,11 +556,7 @@ async def get_add_lp(_amounts: List[int]) -> int:
         if amount == 0:
             continue
 
-        prev_vb = (
-            (await pool.functions.virtualBalance(token).call())
-            * rates[j]
-            / (await pool.functions.rate(token).call())
-        )
+        prev_vb = (virtual_balances[token]) * rates[j] // (prev_rates[token])
 
         dvb = amount * rates[j] / PRECISION
         vb = prev_vb + dvb
@@ -580,9 +592,9 @@ async def get_add_lp(_amounts: List[int]) -> int:
         if _amounts[token] == 0:
             continue
         _check_bands(
-            (await pool.functions.virtualBalance(token).call())
+            (virtual_balances[token])
             * rates[j]
-            / (await pool.functions.rate(token).call())
+            / (prev_rates[token])
             * PRECISION
             / prev_vb_sum,
             balances[j] * PRECISION / vb_sum_final,
@@ -602,7 +614,6 @@ async def get_add_lp(_amounts: List[int]) -> int:
     return supply - prev_supply
 
 
-@profile
 async def get_remove_lp(_lp_amount: int) -> List[int]:
     amounts = []
     num_tokens = 4
@@ -639,30 +650,74 @@ async def get_remove_lp(_lp_amount: int) -> List[int]:
     return amounts
 
 
-@profile
-def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
-    num_tokens = pool.functions.numTokens().call()
+async def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
+    num_tokens = 4
     assert _token < num_tokens
 
-    #  update rate
+    batch = web3.batch_requests()
+
+    [batch.add(pool.functions.rate(t).call()) for t in range(4)]
+    [batch.add(pool.functions.virtualBalance(t).call()) for t in range(4)]
+    [batch.add(pool.functions.packedWeight(t).call()) for t in range(4)]
+    [batch.add(pool.functions.weight(t).call()) for t in range(4)]
+
+    for i in range(num_tokens):
+        provider = web3.eth.contract(address=rate_providers[i], abi=rate_provider_abi)
+        batch.add(provider.functions.rate(tokens_addresses[i]).call())
+
+    batch.add(pool.functions.supply().call())
+    batch.add(pool.functions.virtualBalanceProdSum().call())
+    batch.add(pool.functions.rampLastTime().call())
+    batch.add(pool.functions.rampStopTime().call())
+    batch.add(pool.functions.rampStep().call())
+    batch.add(pool.functions.amplification().call())
+    batch.add(pool.functions.targetAmplification().call())
+    batch.add(web3.eth.get_block("latest"))
+
+    responses = await batch.async_execute()
+
+    prev_rates = responses[:4]
+    virtual_balances = responses[4:8]
+    packed_weights = responses[8:12]
+    weights = responses[12:16]
+    latest_rates = responses[16:20]
+    supply = responses[20]
+    vb_prod, vb_sum = responses[21]
+    span = responses[22]
+    duration = responses[23]
+    ramp_step = responses[24]
+    amplification = responses[25]
+    target_amplification = responses[26]
+    timestamp = responses[27]["timestamp"]
+
+    # update rate
     prev_supply = 0
-    amplification = 0
-    vb_prod = 0
-    vb_sum = 0
-    vb_prod, vb_sum = pool.functions.virtualBalanceProdSum().call()
-    packed_weights = []
     rates = []
-    prev_supply, amplification, vb_prod, vb_sum, packed_weights, rates = _get_rates(
-        unsafe_add(_token, 1), vb_prod, vb_sum
+
+    prev_supply, amplification, vb_prod, vb_sum, packed_weights, rates = (
+        await _get_rates(
+            unsafe_add(_token, 1),
+            prev_rates,
+            latest_rates,
+            weights,
+            packed_weights,
+            supply,
+            virtual_balances,
+            vb_prod,
+            vb_sum,
+            span,
+            duration,
+            timestamp,
+            ramp_step,
+            amplification,
+            target_amplification,
+        )
     )
+
     prev_vb_sum = vb_sum
 
     supply = prev_supply - _lp_amount
-    prev_vb = (
-        pool.functions.virtualBalance(_token).call()
-        * rates[0]
-        / pool.functions.rate(_token).call()
-    )
+    prev_vb = virtual_balances[_token] * rates[_token] // prev_rates[_token]
     wn = _unpack_wn(packed_weights[_token], num_tokens)
 
     #  update variables
@@ -683,10 +738,10 @@ def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
         int(vb_sum),
     )
     dvb = prev_vb - vb
-    fee = int(dvb) * pool.functions.swapFeeRate().call() // 2 // PRECISION
+    fee = int(dvb * 150000000000000 // PRECISION)
     dvb -= fee
     vb += fee
-    dx = dvb * PRECISION / rates[0]
+    dx = dvb * PRECISION / rates[_token]
     vb_sum = vb_sum + vb
 
     for token in range(MAX_NUM_ASSETS):
@@ -699,7 +754,7 @@ def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
                 packed_weights[token],
             )
         else:
-            bal = pool.functions.virtualBalance(token).call()
+            bal = virtual_balances[_token]
             _check_bands(
                 bal * PRECISION / prev_vb_sum,
                 bal * PRECISION // vb_sum,
@@ -709,66 +764,55 @@ def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     return dx
 
 
-@profile
 async def _get_rates(
     _tokens: int,
+    _rates: List[int],
+    _lastest_rates: List[int],
     _weights: List[List[int]],
+    _packed_weights: List[int],
     _supply: int,
     _virtual_balances: List[int],
     _vb_prod: int,
     _vb_sum: int,
-    span: int,
-    duration: int,
-    timestamp: int,
-    ramp_step: int,
-    amplification: int,
-    target_amplification: int,
+    _span: int,
+    _duration: int,
+    _timestamp: int,
+    _ramp_step: int,
+    _amplification: int,
+    _target_amplification: int,
 ) -> (int, int, int, int, List[int], List[int]):
+    num_tokens = 4
     packed_weights = []
-    rates = []
+    rates = _lastest_rates
 
     amplification = 0
     vb_prod = 0
     vb_sum = _vb_sum
-    amplification, vb_prod, _packed_weights, updated = await _get_packed_weights(
+    amplification, vb_prod, packed_weights, updated = await _get_packed_weights(
         _weights,
         _supply,
         _virtual_balances,
         _vb_prod,
         _vb_sum,
-        span,
-        duration,
-        timestamp,
-        ramp_step,
-        amplification,
-        target_amplification,
+        _span,
+        _duration,
+        _timestamp,
+        _ramp_step,
+        _amplification,
+        _target_amplification,
     )
 
-    # num_tokens = pool.functions.numTokens().call()
-    num_tokens = 4
-
     if not updated:
-        for token in range(MAX_NUM_ASSETS):
-            if token == num_tokens:
-                break
-            packed_weight = await pool.functions.packedWeight(token).call()
-            packed_weights.append(packed_weight)
+        packed_weights = _packed_weights
 
     for i in range(MAX_NUM_ASSETS):
         token = (_tokens >> unsafe_mul(8, i)) & 255
+
         if token == 0 or token > num_tokens:
             break
         token = unsafe_sub(token, 1)
-        prev_rate = await pool.functions.rate(token).call()
-
-        provider_address = await pool.functions.rateProviders(token).call()
-        provider = web3.eth.contract(
-            address=provider_address, abi=rate_provider_abi)
-        rate = await provider.functions.rate(
-            await pool.functions.tokens(token).call()
-        ).call()
-        assert rate > 0
-        rates.append(rate)
+        prev_rate = _rates[token]
+        rate = rates[token]
 
         if rate == prev_rate:
             continue
@@ -776,39 +820,47 @@ async def _get_rates(
         if prev_rate > 0 and vb_sum > 0:
             # factor out old rate and factor in new
             wn = _unpack_wn(packed_weights[token], num_tokens)
+
             vb_prod = (
                 vb_prod
-                * math._pow_up(int(prev_rate * PRECISION // rate), wn)
-                / PRECISION
+                * math._pow_up(int(prev_rate * PRECISION // rate), int(wn))
+                // PRECISION
             )
 
-            prev_bal = await pool.functions.virtualBalance(token).call()
+            prev_bal = _virtual_balances[token]
             bal = prev_bal * rate // prev_rate
             vb_sum = vb_sum + bal - prev_bal
 
     if not updated and vb_prod == _vb_prod and vb_sum == _vb_sum:
         return (
-            (await pool.functions.supply().call()),
-            amplification,
-            vb_prod,
-            vb_sum,
+            int(_supply),
+            int(amplification),
+            int(vb_prod),
+            int(vb_sum),
             packed_weights,
             rates,
         )
 
     supply = 0
+
     (supply, vb_prod) = _calc_supply(
         int(num_tokens),
-        int(await pool.functions.supply().call()),
+        int(_supply),
         int(amplification),
         int(vb_prod),
         int(vb_sum),
         True,
     )
-    return supply, amplification, vb_prod, vb_sum, packed_weights, rates
+    return (
+        int(supply),
+        int(amplification),
+        int(vb_prod),
+        int(vb_sum),
+        packed_weights,
+        rates,
+    )
 
 
-@profile
 async def _get_packed_weights(
     _weights: List[List[int]],
     _supply: int,
@@ -891,7 +943,7 @@ async def _get_packed_weights(
                     math._pow_down(
                         unsafe_div(
                             unsafe_mul(supply, current),
-                            (await pool.functions.virtualBalance(token)),
+                            _virtual_balances[token],
                         ),
                         unsafe_mul(current, num_tokens),
                     ),
@@ -902,7 +954,6 @@ async def _get_packed_weights(
     return amplification, vb_prod, packed_weights, True
 
 
-@profile
 def _pack_weight(_weight: int, _target: int, _lower: int, _upper: int) -> int:
     return (
         unsafe_div(_weight, WEIGHT_SCALE)
@@ -912,23 +963,19 @@ def _pack_weight(_weight: int, _target: int, _lower: int, _upper: int) -> int:
     )
 
 
-@profile
 def _unpack_weights(_packed: int) -> (int, int, int, int):
     return (
         unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE),
-        unsafe_mul((_packed >> -TARGET_WEIGHT_SHIFT)
-                   & WEIGHT_MASK, WEIGHT_SCALE),
+        unsafe_mul((_packed >> -TARGET_WEIGHT_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE),
         unsafe_mul((_packed >> -LOWER_BAND_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE),
         unsafe_mul((_packed >> -UPPER_BAND_SHIFT), WEIGHT_SCALE),
     )
 
 
-@profile
 def _unpack_wn(_packed: int, _num_tokens: int) -> int:
     return unsafe_mul(unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE), _num_tokens)
 
 
-@profile
 def _calc_supply(
     _num_tokens: int,
     _supply: int,
@@ -948,13 +995,14 @@ def _calc_supply(
 
     num_tokens = _num_tokens
     for _ in range(255):
-        sp = unsafe_div(unsafe_sub(l, unsafe_mul(s, r)), d)  # (l - s * r) / d
+        # (l - s * r) / d
+        sp = int(unsafe_div(unsafe_sub(l, unsafe_mul(s, r)), d))
         for i in range(MAX_NUM_ASSETS):
             if i == num_tokens:
                 break
             r = unsafe_div(unsafe_mul(r, sp), s)  # r * sp / s
         if sp >= s:
-            if (sp - s) * PRECISION / s <= MAX_POW_REL_ERR:
+            if (sp - s) * PRECISION // s <= MAX_POW_REL_ERR:
                 if _up:
                     sp += sp * MAX_POW_REL_ERR / PRECISION
                 else:
@@ -963,16 +1011,15 @@ def _calc_supply(
         else:
             if (s - sp) * PRECISION / s <= MAX_POW_REL_ERR:
                 if _up:
-                    sp += sp * MAX_POW_REL_ERR / PRECISION
+                    sp += sp * MAX_POW_REL_ERR // PRECISION
                 else:
-                    sp -= sp * MAX_POW_REL_ERR / PRECISION
-                return sp, r
+                    sp -= sp * MAX_POW_REL_ERR // PRECISION
+                return int(sp), int(r)
         s = sp
 
     raise "no convergence"
 
 
-@profile
 def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
     # y = x_j, sum' = sum(x_i, i != j), prod' = prod(x_i^w_i, i != j)
     # w = product(w_i), v_i = w_i n, f_i = 1/v_i
@@ -1015,7 +1062,6 @@ def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
     raise "no convergence"
 
 
-@profile
 def _check_bands(_prev_ratio, _ratio, _packed_weight):
     weight = unsafe_mul(_packed_weight & WEIGHT_MASK, WEIGHT_SCALE)
 
@@ -1033,33 +1079,9 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
     # upper limit check
     limit = min(
         unsafe_add(
-            weight, unsafe_mul(
-                (_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)
+            weight, unsafe_mul((_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)
         ),
         PRECISION,
     )
     if _ratio > limit:
         assert _ratio < _prev_ratio  # dev: ratio above upper band
-
-
-@profile
-async def main():
-    result = await get_add_lp(
-        [
-            int(0.1 * PRECISION),
-            int(0.1 * PRECISION),
-            int(0.02 * PRECISION),
-            int(0.01 * PRECISION),
-        ]
-    )
-    #  result = await get_remove_lp(1e6)
-    print("result -", int(result))
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-#  print(int(get_add_lp([int(0.1 * PRECISION), int(0.1 * PRECISION),
-#       int(0.02 * PRECISION), int(0.01 * PRECISION)])))
-# print(int(get_remove_single_lp(1, 1e8)))
-# print(int(get_output_token(0, 1, 1e12)))

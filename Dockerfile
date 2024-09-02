@@ -1,17 +1,17 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
-
-# Install Poetry
-RUN pip install --upgrade pip && pip install --no-cache-dir poetry
-
-# Set the working directory in the container
-WORKDIR /app
-
-# Copy the pyproject.toml and poetry.lock files
-COPY pyproject.toml poetry.lock /app/
+# Use an Alpine PyPy base image
+FROM pypy:3-slim
 
 # Install dependencies
-RUN poetry install --no-root
+RUN pip install --upgrade pip && pip install --no-cache-dir poetry 
+
+# Set the working directory
+WORKDIR /app
+
+# Copy only the pyproject.toml and poetry.lock files first
+COPY pyproject.toml poetry.lock /app/
+
+# Install Python dependencies
+RUN poetry install 
 
 # Copy the rest of the application code
 COPY . /app
@@ -20,5 +20,5 @@ COPY . /app
 EXPOSE 5000
 
 # Run the Flask application
-CMD ["poetry", "run", "flask", "run", "--host=0.0.0.0"]
+CMD ["poetry", "run", "flask", "run", "--host=0.0.0.0", "--port=5000"]
 

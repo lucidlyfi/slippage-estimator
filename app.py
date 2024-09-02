@@ -8,7 +8,7 @@ CORS(app)
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_output_token', methods=['GET'])
-def get_output_token_route():
+async def get_output_token_route():
     _i = int(request.args.get('_i'))
     _j = int(request.args.get('_j'))
     _dx = int(request.args.get('_dx'))
@@ -18,15 +18,15 @@ def get_output_token_route():
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_add_lp', methods=['POST'])
-def get_add_lp_route():
+async def get_add_lp_route():
     _amounts = request.json.get('_amounts')
-    result = int(get_add_lp(_amounts))
+    result = int(await get_add_lp(_amounts))
     return jsonify({'result': result})
 
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_remove_lp', methods=['GET'])
-def get_remove_lp_route():
+async def get_remove_lp_route():
     _lp_amount = int(request.args.get('_lp_amount'))
     result = get_remove_lp(_lp_amount)
     return jsonify({'result': result})
@@ -34,11 +34,11 @@ def get_remove_lp_route():
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_remove_single_lp', methods=['GET'])
-def get_remove_single_lp_route():
+async def get_remove_single_lp_route():
     _token = int(request.args.get('_token'))
     _lp_amount = int(request.args.get('_lp_amount'))
-    result = int(get_remove_single_lp(_token, _lp_amount))
-    return jsonify({'result': result})
+    result = await get_remove_single_lp(_token, _lp_amount)
+    return jsonify({'result': int(result)})
 
 
 if __name__ == '__main__':
