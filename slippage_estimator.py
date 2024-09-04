@@ -25,6 +25,13 @@ mastervault_abi = data1["abi"]
 pool_address = "0x8dBE744F6558F36d34574a0a6eCA5A8dAa827235"
 pool = web3.eth.contract(address=pool_address, abi=pool_abi)
 
+#  mastervault abi
+f = open("abi_data/MasterVault.sol.json")
+data = json.load(f)
+mastervault_abi = data["abi"]
+
+mastervault_address = "0xfDcDEE4c6fA8b4DBF8e44c30825d2Ab80fd3F0a1"
+
 # rate provider abi
 rate_provider_abi = '[{"inputs":[],"name":"RateProvider__InvalidParams","type":"error"},{"inputs":[{"internalType":"address","name":"token_","type":"address"}],"name":"rate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'
 
@@ -127,7 +134,8 @@ class LogExpMath:
             return 0
         return unsafe_add(
             unsafe_add(
-                p, unsafe_div(unsafe_sub(unsafe_mul(p, MAX_POW_REL_ERR), 1), PRECISION)
+                p, unsafe_div(unsafe_sub(unsafe_mul(
+                    p, MAX_POW_REL_ERR), 1), PRECISION)
             ),
             1,
         )
@@ -138,7 +146,8 @@ class LogExpMath:
         if p == 0:
             return 0
         e = unsafe_add(
-            unsafe_div(unsafe_sub(unsafe_mul(p, MAX_POW_REL_ERR), 1), PRECISION), 1
+            unsafe_div(unsafe_sub(unsafe_mul(
+                p, MAX_POW_REL_ERR), 1), PRECISION), 1
         )
         if p < e:
             return 0
@@ -152,8 +161,10 @@ class LogExpMath:
         if _x == 0:
             return 0  # 0^y == 0
 
-        assert (_x >> int(255)) == 0, "x out of bounds"
-        assert _y < MILD_EXP_BOUND, "y out of bounds"
+        if not _x >> int(255) == 0:
+            raise ValueError("x out of bounds")
+        if not _y < MILD_EXP_BOUND:
+            raise ValueError("y out of bounds")
 
         x = int(_x)
         y = int(_y)
@@ -267,7 +278,8 @@ class LogExpMath:
 
     @staticmethod
     def _exp(_x: int) -> int:
-        assert MIN_NAT_EXP <= _x <= MAX_NAT_EXP, "exp out of bounds"
+        if not MIN_NAT_EXP <= _x <= MAX_NAT_EXP:
+            raise ValueError("exp out of bounds")
         if _x < 0:
             return unsafe_mul(E18, E18) // LogExpMath.__exp(-_x)
         return LogExpMath.__exp(_x)
@@ -346,9 +358,12 @@ math = LogExpMath()
 
 async def get_output_token(_i: int, _j: int, _dx: int) -> int:
     num_tokens = 4
-    assert _i != _j  # dev: same input and output asset
-    assert _i < num_tokens and _j < num_tokens  # dev: index out of bounds
-    assert _dx > 0  # dev: zero amount
+    if not _i != _j:
+        raise KeyError("same input and output asset")
+    if not _i < num_tokens and _j < num_tokens:
+        raise KeyError("index out of bounds")
+    if not _dx > 0:
+        raise KeyError("zero amount")
 
     batch = web3.batch_requests()
 
@@ -358,7 +373,8 @@ async def get_output_token(_i: int, _j: int, _dx: int) -> int:
     [batch.add(pool.functions.weight(t).call()) for t in range(4)]
 
     for i in range(num_tokens):
-        provider = web3.eth.contract(address=rate_providers[i], abi=rate_provider_abi)
+        provider = web3.eth.contract(
+            address=rate_providers[i], abi=rate_provider_abi)
         batch.add(provider.functions.rate(tokens_addresses[i]).call())
 
     batch.add(pool.functions.supply().call())
@@ -454,7 +470,8 @@ async def get_output_token(_i: int, _j: int, _dx: int) -> int:
 
 async def get_add_lp(_amounts: List[int]) -> int:
     num_tokens = 4
-    assert len(_amounts) == num_tokens
+    if not len(_amounts) == num_tokens:
+        raise KeyError("invalid number of tokens")
 
     virtual_balances = []
     packed_weights = []
@@ -468,7 +485,8 @@ async def get_add_lp(_amounts: List[int]) -> int:
     [batch.add(pool.functions.weight(t).call()) for t in range(4)]
 
     for i in range(num_tokens):
-        provider = web3.eth.contract(address=rate_providers[i], abi=rate_provider_abi)
+        provider = web3.eth.contract(
+            address=rate_providers[i], abi=rate_provider_abi)
         batch.add(provider.functions.rate(tokens_addresses[i]).call())
 
     batch.add(pool.functions.supply().call())
@@ -496,7 +514,8 @@ async def get_add_lp(_amounts: List[int]) -> int:
     target_amplification = responses[26]
     timestamp = responses[27]["timestamp"]
 
-    assert vb_sum > 0
+    if not vb_sum > 0:
+        raise ValueError("invalid params")
 
     # find lowest relative increase in balance
     tokens = 0
@@ -510,12 +529,14 @@ async def get_add_lp(_amounts: List[int]) -> int:
             sh = unsafe_add(sh, 8)
             if vb_sum > 0 and lowest > 0:
                 lowest = min(
-                    _amounts[token] * prev_rates[token] // virtual_balances[token],
+                    _amounts[token] *
+                    prev_rates[token] // virtual_balances[token],
                     lowest,
                 )
         else:
             lowest = 0
-    assert sh > 0
+    if not sh > 0:
+        raise ValueError("invalid params")
 
     # update rates
     prev_supply = supply
@@ -614,7 +635,7 @@ async def get_add_lp(_amounts: List[int]) -> int:
     return supply - prev_supply
 
 
-async def get_remove_lp(_lp_amount: int) -> List[int]:
+async def get_remove_lp(_mvt_amount: int) -> List[int]:
     amounts = []
     num_tokens = 4
 
@@ -622,22 +643,24 @@ async def get_remove_lp(_lp_amount: int) -> List[int]:
     prev_balances = []
 
     batch = web3.batch_requests()
+    mastervault = web3.eth.contract(
+        address=mastervault_address, abi=mastervault_abi)
 
     batch.add(pool.functions.supply().call())
 
-    for t in range(4):
-        batch.add(pool.functions.virtualBalance(t).call())
-        batch.add(pool.functions.rate(t).call())
+    [batch.add(pool.functions.virtualBalance(t).call()) for t in range(4)]
+    [batch.add(pool.functions.rate(t).call()) for t in range(4)]
+    batch.add(mastervault.functions.previewRedeem(_mvt_amount).call())
 
     responses = await batch.async_execute()
 
     prev_supply = responses[0]
+    prev_balances = responses[1:5]
+    rates = responses[5:9]
+    _lp_amount = responses[9]
 
-    for i in range(4):
-        prev_balances.append(responses[2 * i + 1])
-        rates.append(responses[2 * i + 2])
-
-    assert _lp_amount <= prev_supply
+    if not _lp_amount <= prev_supply:
+        raise KeyError("lp amount is more than the last supply amount")
 
     for token in range(MAX_NUM_ASSETS):
         if token == num_tokens:
@@ -650,11 +673,15 @@ async def get_remove_lp(_lp_amount: int) -> List[int]:
     return amounts
 
 
-async def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
+async def get_remove_single_lp(_token: int, _mvt_amount: int) -> int:
     num_tokens = 4
-    assert _token < num_tokens
+    if not _token < num_tokens:
+        raise KeyError("invalid token")
 
     batch = web3.batch_requests()
+
+    mastervault = web3.eth.contract(
+        address=mastervault_address, abi=mastervault_abi)
 
     [batch.add(pool.functions.rate(t).call()) for t in range(4)]
     [batch.add(pool.functions.virtualBalance(t).call()) for t in range(4)]
@@ -662,7 +689,8 @@ async def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     [batch.add(pool.functions.weight(t).call()) for t in range(4)]
 
     for i in range(num_tokens):
-        provider = web3.eth.contract(address=rate_providers[i], abi=rate_provider_abi)
+        provider = web3.eth.contract(
+            address=rate_providers[i], abi=rate_provider_abi)
         batch.add(provider.functions.rate(tokens_addresses[i]).call())
 
     batch.add(pool.functions.supply().call())
@@ -673,6 +701,7 @@ async def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     batch.add(pool.functions.amplification().call())
     batch.add(pool.functions.targetAmplification().call())
     batch.add(web3.eth.get_block("latest"))
+    batch.add(mastervault.functions.previewRedeem(_mvt_amount).call())
 
     responses = await batch.async_execute()
 
@@ -689,6 +718,7 @@ async def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
     amplification = responses[25]
     target_amplification = responses[26]
     timestamp = responses[27]["timestamp"]
+    _lp_amount = responses[28]
 
     # update rate
     prev_supply = 0
@@ -761,7 +791,7 @@ async def get_remove_single_lp(_token: int, _lp_amount: int) -> int:
                 packed_weights[token],
             )
 
-    return dx
+    return int(dx)
 
 
 async def _get_rates(
@@ -966,7 +996,8 @@ def _pack_weight(_weight: int, _target: int, _lower: int, _upper: int) -> int:
 def _unpack_weights(_packed: int) -> (int, int, int, int):
     return (
         unsafe_mul(_packed & WEIGHT_MASK, WEIGHT_SCALE),
-        unsafe_mul((_packed >> -TARGET_WEIGHT_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE),
+        unsafe_mul((_packed >> -TARGET_WEIGHT_SHIFT)
+                   & WEIGHT_MASK, WEIGHT_SCALE),
         unsafe_mul((_packed >> -LOWER_BAND_SHIFT) & WEIGHT_MASK, WEIGHT_SCALE),
         unsafe_mul((_packed >> -UPPER_BAND_SHIFT), WEIGHT_SCALE),
     )
@@ -1017,7 +1048,7 @@ def _calc_supply(
                 return int(sp), int(r)
         s = sp
 
-    raise "no convergence"
+    raise ValueError("no convergence")
 
 
 def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
@@ -1059,7 +1090,7 @@ def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
                 return yp
         y = yp
 
-    raise "no convergence"
+    raise ValueError("no convergence")
 
 
 def _check_bands(_prev_ratio, _ratio, _packed_weight):
@@ -1074,14 +1105,17 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
     else:
         limit = unsafe_sub(weight, limit)
     if _ratio < limit:
-        assert _ratio > _prev_ratio  # dev: ratio below lower band
+        if not _ratio > _prev_ratio:
+            raise ValueError("ratio below lower band")
 
     # upper limit check
     limit = min(
         unsafe_add(
-            weight, unsafe_mul((_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)
+            weight, unsafe_mul(
+                (_packed_weight >> -UPPER_BAND_SHIFT), WEIGHT_SCALE)
         ),
         PRECISION,
     )
     if _ratio > limit:
-        assert _ratio < _prev_ratio  # dev: ratio above upper band
+        if not _ratio < _prev_ratio:
+            raise ValueError("ratio above upper band")

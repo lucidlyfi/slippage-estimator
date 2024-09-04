@@ -12,24 +12,40 @@ async def get_output_token_route():
     _i = int(request.args.get('_i'))
     _j = int(request.args.get('_j'))
     _dx = int(request.args.get('_dx'))
-    result = await get_output_token(_i, _j, _dx)
-    return jsonify({'result': int(result)})
+    try:
+        result = await get_output_token(_i, _j, _dx)
+        return jsonify({'result': int(result)})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError as e:
+        return jsonify({"error": f"Missing parameter: {str(e)}"}), 400
 
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_add_lp', methods=['POST'])
 async def get_add_lp_route():
     _amounts = request.json.get('_amounts')
-    result = await get_add_lp(_amounts)
-    return jsonify({'result': int(result)})
+
+    try:
+        result = await get_add_lp(_amounts)
+        return jsonify({'result': int(result)})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError as e:
+        return jsonify({"error": f"Missing parameter: {str(e)}"}), 400
 
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_remove_lp', methods=['GET'])
 async def get_remove_lp_route():
     _lp_amount = int(request.args.get('_lp_amount'))
-    result = await get_remove_lp(_lp_amount)
-    return jsonify({'result': result})
+    try:
+        result = await get_remove_lp(_lp_amount)
+        return jsonify({'result': result})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError as e:
+        return jsonify({"error": f"Missing parameter: {str(e)}"}), 400
 
 
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
@@ -37,8 +53,13 @@ async def get_remove_lp_route():
 async def get_remove_single_lp_route():
     _token = int(request.args.get('_token'))
     _lp_amount = int(request.args.get('_lp_amount'))
-    result = await get_remove_single_lp(_token, _lp_amount)
-    return jsonify({'result': int(result)})
+    try:
+        result = await get_remove_single_lp(_token, _lp_amount)
+        return jsonify({'result': int(result)})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except KeyError as e:
+        return jsonify({"error": f"Missing parameter: {str(e)}"}), 400
 
 
 if __name__ == '__main__':
