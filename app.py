@@ -38,9 +38,9 @@ async def get_add_lp_route():
 @cross_origin(origins=["http://localhost:3000", "https://app.lucidly.finance"])
 @app.route('/get_remove_lp', methods=['GET'])
 async def get_remove_lp_route():
-    _lp_amount = int(request.args.get('_lp_amount'))
+    _mvt_amount = int(request.args.get('_mvt_amount'))
     try:
-        result = await get_remove_lp(_lp_amount)
+        result = await get_remove_lp(_mvt_amount)
         return jsonify({'result': result})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -52,9 +52,9 @@ async def get_remove_lp_route():
 @app.route('/get_remove_single_lp', methods=['GET'])
 async def get_remove_single_lp_route():
     _token = int(request.args.get('_token'))
-    _lp_amount = int(request.args.get('_lp_amount'))
+    _mvt_amount = int(request.args.get('_mvt_amount'))
     try:
-        result = await get_remove_single_lp(_token, _lp_amount)
+        result = await get_remove_single_lp(_token, _mvt_amount)
         return jsonify({'result': int(result)})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
