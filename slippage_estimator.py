@@ -22,7 +22,7 @@ data1 = json.load(f1)
 mastervault_abi = data1["abi"]
 
 # pool contract address
-pool_address = "0x8dBE744F6558F36d34574a0a6eCA5A8dAa827235"
+pool_address = "0x82Fbc848eeCeC6D0a2eBdC8A9420826AE8d2952d"
 pool = web3.eth.contract(address=pool_address, abi=pool_abi)
 
 #  mastervault abi
@@ -30,7 +30,7 @@ f = open("abi_data/MasterVault.sol.json")
 data = json.load(f)
 mastervault_abi = data["abi"]
 
-mastervault_address = "0xfDcDEE4c6fA8b4DBF8e44c30825d2Ab80fd3F0a1"
+mastervault_address = "0xD3Fd1d45499c8500e8009A31c795C7e01CCD7a12"
 
 # rate provider abi
 rate_provider_abi = '[{"inputs":[],"name":"RateProvider__InvalidParams","type":"error"},{"inputs":[{"internalType":"address","name":"token_","type":"address"}],"name":"rate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'
@@ -39,14 +39,14 @@ tokens_addresses = [
     "0xD9A442856C234a39a81a089C06451EBAa4306a72",  # pufEth
     "0xEEda34A377dD0ca676b9511EE1324974fA8d980D",  # pufEth/wstEth
     "0x39F5b252dE249790fAEd0C2F05aBead56D2088e1",  # weth/pufEth
-    "0x66017371c032Cd5a67Fec6913A9e37d5bd1C690c",  # y-PT-auto-rolling pufEth
+    "0xeC3B2CC4C6a8fC9a13620A91622483b56E2E6fD9",  # morpho pufEthWeth 86 lltv
 ]
 
 rate_providers = [
     "0xC4EF2c4B4eD79CD7639AF070d4a6A82eEF5edd4f",
     "0xC4EF2c4B4eD79CD7639AF070d4a6A82eEF5edd4f",
     "0x60d4BCab4A8b1849Ca19F6B4a6EaB26A66496267",
-    "0x73717f7FF55E0acDB1F5f5789D13d7c40A08E4CA",
+    "0x3C730BC8Ff9d7D51395c180c409597ae80A63056",
 ]
 
 #  math stuff
