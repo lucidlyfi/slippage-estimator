@@ -70,7 +70,7 @@ E18 = E3 * E15
 E20 = 100 * E18
 E36 = E18 * E18
 
-MAX_POW_REL_ERR = 100  # 1e-16
+MAX_POW_REL_ERR = 1000  # 1e-15
 MIN_NAT_EXP = -41 * E18
 MAX_NAT_EXP = 130 * E18
 LOG36_LOWER = E18 - E17
@@ -1051,7 +1051,7 @@ def _calc_supply(
     raise ValueError("no convergence")
 
 
-def _calc_vb(_wn, _y, _supply, _amplification, _vb_prod, _vb_sum) -> int:
+def _calc_vb(_wn: int, _y: int, _supply: int, _amplification: int, _vb_prod: int, _vb_sum: int) -> int:
     # y = x_j, sum' = sum(x_i, i != j), prod' = prod(x_i^w_i, i != j)
     # w = product(w_i), v_i = w_i n, f_i = 1/v_i
     # Iteratively find root of g(y) using Newton's method
@@ -1119,3 +1119,13 @@ def _check_bands(_prev_ratio, _ratio, _packed_weight):
     if _ratio > limit:
         if not _ratio < _prev_ratio:
             raise ValueError("ratio above upper band")
+
+
+#  async def main():
+#      result = await get_remove_single_lp(1, 10**18)
+#
+#      print("result -", int(result))
+#
+#
+#  if __name__ == "__main__":
+#      asyncio.run(main())
